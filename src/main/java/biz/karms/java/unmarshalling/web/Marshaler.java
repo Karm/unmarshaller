@@ -1,14 +1,12 @@
 package biz.karms.java.unmarshalling.web;
 
-import org.apache.commons.fileupload.FileItemIterator;
-import org.apache.commons.fileupload.FileItemStream;
-import org.apache.commons.fileupload.servlet.ServletFileUpload;
-
 import javax.servlet.ServletException;
+import javax.servlet.annotation.MultipartConfig;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.Part;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -23,6 +21,7 @@ import java.util.logging.Logger;
  * @author Michal Karm Babacek
  */
 @WebServlet(name = "MarshalerServlet", urlPatterns = {"/marshaler", "/marshaler/*"})
+@MultipartConfig
 public class Marshaler extends HttpServlet {
     private static final Logger log = Logger.getLogger(Marshaler.class.getName());
 
@@ -53,35 +52,28 @@ public class Marshaler extends HttpServlet {
     }
 
     @Override
-    public void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        final ServletFileUpload upload = new ServletFileUpload();
+    public void doPost(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws ServletException, IOException {
+        final Part filePart = httpServletRequest.getPart("filedata");
+        ByteArrayOutputStream out = null;
+        InputStream filecontent = null;
+        ObjectInputStream objectInputStream = null;
         try {
-            FileItemIterator filesIter = upload.getItemIterator(req);
-            while (filesIter.hasNext()) {
-                final FileItemStream file = filesIter.next();
-                InputStream in = null;
-                ByteArrayOutputStream out = null;
-                ObjectInputStream objectInputStream = null;
-                try {
-                    in = file.openStream();
-                    out = new ByteArrayOutputStream();
-                    byte[] buffer = new byte[4096];
-                    int size;
-                    while ((size = in.read(buffer, 0, buffer.length)) != -1) {
-                        out.write(buffer, 0, size);
-                    }
-                    objectInputStream = new ObjectInputStream(new ByteArrayInputStream(out.toByteArray()));
-                    resp.getWriter().print(((Frog) objectInputStream.readObject()).getName());
-                } catch (Exception e) {
-                    log.log(Level.SEVERE, "Error with deserialization.", e);
-                } finally {
-                    if (in != null) in.close();
-                    if (out != null) out.close();
-                    if (objectInputStream != null) objectInputStream.close();
-                }
+            out = new ByteArrayOutputStream();
+            filecontent = filePart.getInputStream();
+            int read = 0;
+            final byte[] bytes = new byte[4096];
+
+            while ((read = filecontent.read(bytes)) != -1) {
+                out.write(bytes, 0, read);
             }
+            objectInputStream = new ObjectInputStream(new ByteArrayInputStream(out.toByteArray()));
+            httpServletResponse.getWriter().print(((Frog) objectInputStream.readObject()).getName());
         } catch (Exception e) {
-            log.log(Level.SEVERE, "Error with upload.", e);
+            log.log(Level.SEVERE, "Error with deserialization.", e);
+        } finally {
+            if (filecontent != null) filecontent.close();
+            if (out != null) out.close();
+            if (objectInputStream != null) objectInputStream.close();
         }
     }
 }
